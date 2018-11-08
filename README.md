@@ -1,1 +1,1 @@
-# EPS236_project
+# EPS236 Project
