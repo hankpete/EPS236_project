@@ -1,8 +1,6 @@
 #!/usr/bin/env python3 
 ################################################################################
-# 
-#
-#
+# This file is just for testing basic methods in 1D as a debugging tool. 
 ################################################################################
 
 import numpy as np
