@@ -7,24 +7,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def solve_laplace(f, dx, dy):
+def solve_poisson(f, dx, dy):
     tol = 1e-5
     u = np.ones(f.shape)
     error = 1
     i = 0
     while error > tol:
         u_new = 1/4 * (np.roll(u, 1, axis=0) + np.roll(u, -1, axis=0) + np.roll(u, 1, axis=1) + np.roll(u, -1, axis=1) + f * dx**2)
-        # u_new[0, :] = u_new[1, :]; u_new[-1, :] = u_new[-2, :]
-        # u_new[:, 0] = u_new[:, 1]; u_new[:, -1] = u_new[:, -2]
-        u_new[0, :] = 0; u_new[-1, :] = 0
-        u_new[:, 0] = 0; u_new[:, -1] = 0
+
+        u_new[0, :] = u_new[1, :]; 
+        u_new[-1, :] = u_new[-2, :]
+        # u_new[:, 0] = u_new[:, 1]; 
+        # u_new[:, -1] = u_new[:, -2]
+
+        # u_new[0, :] = 0; 
+        # u_new[-1, :] = 0
+        u_new[:, 0] = 0; 
+        u_new[:, -1] = 0
+
         error = np.max(np.abs(u - u_new))
         u = u_new
         i += 1
 
-        # if i % 1e3 == 0:
-            # print(error)
-            # plot_image(u)
+        if i % 1e3 == 0:
+            print(error)
+            # plot_scalar_field(u)
     return u
 
 
@@ -43,13 +50,28 @@ def take_step(vel, press, density, kin_visc, dt, dx, dy):
 
     vel_star = vel + dt * ( -(vel[0] * vel_x + vel[1] * vel_y) - beta * grad_press / density + kin_visc * (vel_xx + vel_yy) )
 
+    vel_star[:, 0] = vel_star[:, 1]; 
+    vel_star[:, -1] = vel_star[:, -2]
+
     # solve poisson for phi
+    vel_star_x = (np.roll(vel_star, 1, axis=1) - vel_star) / dx
+    vel_star_y = (np.roll(vel_star, 1, axis=2) - vel_star) / dy
+    phi = solve_poisson(density / dt * (vel_star_x[0] + vel_star_y[1]), dx, dy)
 
     # correct vel_star with phi
+    phi_x = (np.roll(phi, 1, axis=0) - phi) / dx
+    phi_y = (np.roll(phi, 1, axis=1) - phi) / dy
+    grad_phi = np.array([phi_x, phi_y])
+    vel = vel_star - dt / density * grad_phi 
+
+    vel[:, 0] = vel[:, 1]; 
+    vel[:, -1] = vel[:, -2]
+    
 
     # correct press with phi
+    press = phi + beta * press
 
-    return vel
+    return vel, press
 
 
 def plot_scalar_field(data):
@@ -91,7 +113,8 @@ def main():
 
     i = 0
     while True:
-        if i % 100 == 0:
+        # if i % 100 == 0:
+        if True:
             plot_vector_field(vel)
 
             vel_x = (np.roll(vel, 1, axis=1) - vel) / dx
@@ -99,10 +122,9 @@ def main():
             vort = vel_x[1] - vel_y[0]
             plot_scalar_field(vort)
 
-        vel = take_step(vel, press, density, kin_visc, dt, dx, dy)
+        vel, press = take_step(vel, press, density, kin_visc, dt, dx, dy)
         i += 1
 
-    
 
 main()
 
