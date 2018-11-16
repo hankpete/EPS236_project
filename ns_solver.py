@@ -5,6 +5,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 
 def plot_scalar_field(data):
@@ -24,8 +25,8 @@ def plot_vector_field(vel):
     f, ax = plt.subplots(1, figsize=(10,10))
     u = vel[0].T
     v = vel[1].T
-    skip = 4
-    Q = ax.quiver(xx[::skip, ::skip], yy[::skip, ::skip], u[::skip, ::skip], v[::skip, ::skip], pivot='mid', units='inches', scale=30, scale_units='width', headwidth=3, headlength=4, headaxislength=3.5)
+    skip = 2
+    Q = ax.quiver(xx[::skip, ::skip], yy[::skip, ::skip], u[::skip, ::skip], v[::skip, ::skip], pivot='mid', units='inches', scale=40, scale_units='width', headwidth=3, headlength=4, headaxislength=3.5)
     qk = plt.quiverkey(Q, 0.5, 0.05, 1, '1', coordinates='figure')
     plt.show()
 
@@ -74,11 +75,11 @@ def solve_poisson(f):
                 (2 * dy**2 + 2 * dx**2)
 
         # Neumann BC for the periodic boundaries
-        u_new[0, :] = u_new[1, :]; 
-        # u_new[-1, :] = u_new[-2, :]
+        u_new[0, :] = u_new[1, :]
+        u_new[-1, :] = u_new[-2, :]
 
         # Dirichlet BC for the stress free boundaries
-        u_new[:, 0] = 0; 
+        u_new[:, 0] = 0 
         u_new[:, -1] = 0
 
         error = np.max(np.abs(u - u_new))
@@ -102,20 +103,13 @@ def take_step(vel, press, density):
     """
     ### (1) Calculate intermediate velocity, vel_star
     # fractional step coeff
-    beta = 1
+    beta = 0.5
 
     # get all the gradients (remember, vel contains both u and v)
-    # vel_x = (np.roll(vel, 1, axis=1) - vel) / dx
-    # vel_y = (np.roll(vel, 1, axis=2) - vel) / dy
     vel_x, vel_y = gradient_vel(vel)
-    # vel_xx = (np.roll(vel, 1, axis=1) - 2 * vel + np.roll(vel, -1, axis=1)) / dx**2
-    # vel_yy = (np.roll(vel, 1, axis=2) - 2 * vel + np.roll(vel, -1, axis=2)) / dy**2
     vel_xx, vel_yx = gradient_vel(vel_x)
     vel_yx, vel_yy = gradient_vel(vel_y)
 
-    # press_x = (np.roll(press, 1, axis=0) - press) / dx
-    # press_y = (np.roll(press, 1, axis=1) - press) / dy
-    # grad_press = np.array([press_x, press_y])
     grad_press = gradient_scalar(press)
 
     # take step
@@ -127,17 +121,12 @@ def take_step(vel, press, density):
 
     ### (2) solve poisson for phi
     # get gradients
-    # vel_star_x = (np.roll(vel_star, 1, axis=1) - vel_star) / dx
-    # vel_star_y = (np.roll(vel_star, 1, axis=2) - vel_star) / dy
     vel_star_x, vel_star_y = gradient_vel(vel_star)
     # solve \Delta phi = density/dt * div(vel)
     phi = solve_poisson(density / dt * (vel_star_x[0] + vel_star_y[1]))
 
     ### (3) correct vel_star with phi
     # get gradients
-    # phi_x = (np.roll(phi, 1, axis=0) - phi) / dx
-    # phi_y = (np.roll(phi, 1, axis=1) - phi) / dy
-    # grad_phi = np.array([phi_x, phi_y])
     grad_phi = gradient_scalar(phi)
     # incompressibility correction
     vel = vel_star - dt / density * grad_phi 
@@ -175,9 +164,12 @@ min_dx = np.min(np.abs(dx))
 min_dy = np.min(np.abs(dy))
 
 vel = np.zeros( (2, N, N) ) # u = vel[0], v = vel[1]
-vel[0, :, :N//2] = 1
-vel[0, :, N//2:] = -1
-vel[0, (N//2-2):(N//2+2), N//2:(N//2+2)] = 1
+kick = 0.1
+for i in range(N):
+    for j in range(N):
+        yj = y[j]
+        r = random.random()
+        vel[0, i, j] = np.tanh(2 / 0.2 * (yj - L / 2)) + r / 2 * kick * np.exp(- 400 * (yj - L / 2)**2)
 
 press = np.ones( (N, N) )
 
@@ -190,19 +182,16 @@ dtmax = np.min([min_dx, min_dy])**2 / (2 * kin_visc + np.mean(np.abs(vel)) * np.
 dt = dtmax
 
 i = 0
+Nplot = 5
 while True:
     print("Step: {}".format(i))
-    if i % 10 == 0:
+    if i % Nplot == 0:
+        plot_scalar_field(press)
         plot_vector_field(vel)
 
-        # vel_x = (np.roll(vel, 1, axis=1) - vel) / dxx
-        # vel_y = (np.roll(vel, 1, axis=2) - vel) / dyy
         vel_x, vel_y = gradient_vel(vel)
         vort = vel_x[1] - vel_y[0]
         plot_scalar_field(vort)
 
-    vel_new, press_new = take_step(vel, press, density)
-    print(np.max(np.abs((vel_new-vel)/dt)))
-    print(np.max(np.abs((press_new-press)/dt)))
-    vel = vel_new
+    vel, press = take_step(vel, press, density)
     i += 1
