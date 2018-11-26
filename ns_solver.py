@@ -8,26 +8,28 @@ import matplotlib.pyplot as plt
 import random
 
 
-def plot_scalar_field(data):
+def plot_scalar_field(data, title):
     """
     2D plot of a numpy array of scalars using imshow
     """
     f, ax = plt.subplots(1, figsize=(10,10))
     im = ax.imshow(data.T, origin='lower', cmap=plt.get_cmap('rainbow'))
     cb = f.colorbar(im, ax=ax)
+    ax.set_title(title)
     plt.show()
 
 
-def plot_vector_field(vel):
+def plot_vector_field(vel, title):
     """
     2D plot of two numpy arrays of vector components using quiver
     """
     f, ax = plt.subplots(1, figsize=(10,10))
     u = vel[0].T
     v = vel[1].T
-    skip = 2
+    skip = 4
     Q = ax.quiver(xx[::skip, ::skip], yy[::skip, ::skip], u[::skip, ::skip], v[::skip, ::skip], pivot='mid', units='inches', scale=40, scale_units='width', headwidth=3, headlength=4, headaxislength=3.5)
     qk = plt.quiverkey(Q, 0.5, 0.05, 1, '1', coordinates='figure')
+    ax.set_title(title)
     plt.show()
 
 
@@ -68,7 +70,7 @@ def solve_poisson(f):
 
     print("Solving Poisson...")
 
-    tol = 1e-10
+    tol = 1e-8
     u = np.zeros(f.shape)
     error = 1
     i = 0
@@ -95,8 +97,8 @@ def solve_poisson(f):
 
         if i % 1e3 == 0:
             print("  {:1.8E}".format(error))
-    plot_scalar_field(f)
-    plot_scalar_field(u)
+    # plot_scalar_field(f, "f in Poisson")
+    # plot_scalar_field(u, "u in Poisson")
     return u
 
 
@@ -190,7 +192,6 @@ kin_visc = 1e-3
 
 dtmax = np.min([min_dx, min_dy])**2 / (2 * kin_visc + np.mean(np.abs(vel)) * np.min([min_dx, min_dy]))
 dt = dtmax
-# dt = 0.25
 print("dt: {}".format(dt))
 
 i = 0
@@ -198,13 +199,15 @@ Nplot = 5
 while True:
     print("Step: {} (t = {:2.4f})".format(i, dt * i))
     if i % Nplot == 0:
-        plot_scalar_field(press)
+        plot_scalar_field(press, "Pressure")
         
-        plot_vector_field(vel)
+        plot_scalar_field(vel[0], "U")
+        plot_scalar_field(vel[1], "V")
+        plot_vector_field(vel, "Velocity")
 
         vel_x, vel_y = gradient_vel(vel)
         vort = vel_x[1] - vel_y[0]
-        plot_scalar_field(vort)
+        plot_scalar_field(vort, "Vorticity")
 
     vel, press = take_step(vel, press, density)
     i += 1
