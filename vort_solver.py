@@ -39,14 +39,9 @@ def gradient_scalar(f):
     """
     # use numpy's built in gradient function
     [f_x, f_y] = np.gradient(f, x, y)
-    # f_x = (np.roll(f, 1, axis=0) - np.roll(f, -1, axis=0)) / dx
-    # f_y = (np.roll(f, 1, axis=1) - np.roll(f, -1, axis=1)) / dx
     # periodic x boundaries
     f_x[0, :] = (f[1, :] - f[-1, :]) / (x[1] + LX - x[-1])
     f_x[-1, :] = (f[0, :] - f[-2, :]) / (x[0] + LX - x[-2])
-    # # walls at y boundaries
-    # f_y[:, 0] = (f[:, 1] - f[:, 0]) / (y[1] - y[0])
-    # f_y[:, -1] = (f[:, -2] - f[:, -1]) / (y[-2] - y[-1])
     return np.array([f_x, f_y])
 
 
@@ -67,12 +62,10 @@ def solve_poisson(f):
 
     given forcing term 'f' and the spacing of the grid
     """
-
-    print("Solving Poisson...")
-
     tol = 1e-8
     u = streamf
     error = 1
+    error_mag = 0
     i = 0
     while error > tol:
         # Solutions should be the average of the gridpoints around it
@@ -93,8 +86,9 @@ def solve_poisson(f):
         u = u_new
         i += 1
 
-        if i % 1e3 == 0:
-            print("  {:1.8E}".format(error))
+        if error_mag != int(np.log10(error)):
+            error_mag = int(np.log10(error))
+            print("  err: {:1.8E}".format(error))
     # plot_scalar_field(f, "f in Poisson")
     # plot_scalar_field(u, "u in Poisson")
     return u
@@ -102,6 +96,7 @@ def solve_poisson(f):
 
 def take_step(vort, streamf):
     # calculate stream function \Delta Psi = -vort
+    print("Calculating stream function.")
     streamf = solve_poisson(-vort)
 
     # update vorticity
@@ -121,7 +116,7 @@ def take_step(vort, streamf):
 
 
 ### Run Solver
-print("Navier-Stokes Solver For 2D Incompressible Flow\n")
+print("\nVorticity Equation Solver For 2D Incompressible Flow\n")
 
 # NX by NY grid, dimensions LX by LY
 NX = 128
@@ -166,20 +161,19 @@ kin_visc = 1e-3
 
 # Re = 1 / kin_visc
 
-h = np.min([min_dx, min_dy])**2
+h = np.min([min_dx, min_dy])
 u = np.mean(np.abs(vel[0]))
-v = u
-dtmax = np.min([h**2 / (4 * kin_visc), 2 * kin_visc / (u + v)])
-dt = dtmax
+dtmax = np.min([h**2 / (4 * kin_visc), kin_visc / u])
+print("dtmax: {}\n".format(dtmax))
 dt = 0.01
-print("dt: {}".format(dt))
+print("dt: {}\n".format(dt))
 
 i = 0
-Nplot = 100
+Nplot = 10
 while True:
     print("Step: {} (t = {:2.4f})".format(i, dt * i))
     if i % Nplot == 0:
-        plot_scalar_field(vort, "Vorticity")
+        plot_scalar_field(vort, "Vorticity, t = {:2.2f}".format(dt * i))
 
     vort, streamf = take_step(vort, streamf)
     i += 1
