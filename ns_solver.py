@@ -71,7 +71,7 @@ def solve_poisson(f):
     print("Solving Poisson...")
 
     tol = 1e-8
-    u = np.zeros(f.shape)
+    u = press_potential
     error = 1
     i = 0
     while error > tol:
@@ -81,15 +81,18 @@ def solve_poisson(f):
                 dx**2 * dy**2 * f) / \
                 (2 * dy**2 + 2 * dx**2)
 
-        # Neumann BC for the periodic boundaries
-        # u_new[0, :] = u_new[1, :]
-        # u_new[-1, :] = u_new[-2, :]
-        u_new[0, :] = 0
-        u_new[-1, :] = 0
+        # Neumann BC 
+        u_new[0, :] = u_new[1, :]
+        u_new[-1, :] = u_new[-2, :]
+        u_new[:, 0] = u_new[:, 1]
+        u_new[:, -1] = u_new[:, -2]
 
-        # Dirichlet BC for the stress free boundaries
-        u_new[:, 0] = 0 
-        u_new[:, -1] = 0
+        # # Dirichlet BC 
+        # u_new[:, 0] = 0 
+        # u_new[:, -1] = 0
+
+        # Prescibe value at a point
+        u_new[NX//2, NY//2] = 1.0
 
         error = np.max(np.abs(u - u_new))
         u = u_new
@@ -97,12 +100,13 @@ def solve_poisson(f):
 
         if i % 1e3 == 0:
             print("  {:1.8E}".format(error))
-    # plot_scalar_field(f, "f in Poisson")
-    # plot_scalar_field(u, "u in Poisson")
+            # plot_scalar_field(u, "u in Poisson")
+    plot_scalar_field(f, "f in Poisson")
+    plot_scalar_field(u, "u in Poisson")
     return u
 
 
-def take_step(vel, press, density):
+def take_step(vel, press, press_potential, density):
     """
     Take one time step in solving N-S. The procedure:
         (1) a preliminary explicit step
@@ -128,26 +132,26 @@ def take_step(vel, press, density):
     vel_star[:, :, 0] = vel_star[:, :, 1] 
     vel_star[:, :, -1] = vel_star[:, :, -2]
 
-    ### (2) solve poisson for phi
+    ### (2) solve poisson for press_potential
     # get gradients
     vel_star_x, vel_star_y = gradient_vel(vel_star)
-    # solve \Delta phi = density/dt * div(vel)
-    phi = solve_poisson(density / dt * (vel_star_x[0] + vel_star_y[1]))
+    # solve \Delta press_potential = density/dt * div(vel)
+    press_potential = solve_poisson(density / dt * (vel_star_x[0] + vel_star_y[1]))
 
-    ### (3) correct vel_star with phi
+    ### (3) correct vel_star with press_potential
     # get gradients
-    grad_phi = gradient_scalar(phi)
+    grad_press_potential = gradient_scalar(press_potential)
     # incompressibility correction
-    vel = vel_star - dt / density * grad_phi 
+    vel = vel_star - dt / density * grad_press_potential 
 
     # stress free boundary conditions at the top and bottom (periodic on left and right)
     vel[:, :, 0] = vel[:, :, 1] 
     vel[:, :, -1] = vel[:, :, -2]
     
-    ### (4) correct press with phi
-    press = phi + beta * press
+    ### (4) correct press with press_potential
+    press = press_potential + beta * press
 
-    return vel, press
+    return vel, press, press_potential
 
 
 ### Run Solver
@@ -185,6 +189,7 @@ for i in range(NX):
         vel[0, i, j] = deltaU / 2 * np.tanh(2 * yj / delta) + (r - 0.5) * kick * np.exp(-20 * yj**2)
 
 press = np.ones( (NX, NY) )
+press_potential = np.ones( (NX, NY) )
 
 density = np.ones( (NX, NY) )
 
@@ -199,15 +204,15 @@ Nplot = 5
 while True:
     print("Step: {} (t = {:2.4f})".format(i, dt * i))
     if i % Nplot == 0:
-        plot_scalar_field(press, "Pressure")
+        # plot_scalar_field(press, "Pressure")
         
-        plot_scalar_field(vel[0], "U")
-        plot_scalar_field(vel[1], "V")
+        # plot_scalar_field(vel[0], "U")
+        # plot_scalar_field(vel[1], "V")
         plot_vector_field(vel, "Velocity")
 
         vel_x, vel_y = gradient_vel(vel)
         vort = vel_x[1] - vel_y[0]
         plot_scalar_field(vort, "Vorticity")
 
-    vel, press = take_step(vel, press, density)
+    vel, press, press_potential = take_step(vel, press, press_potential, density)
     i += 1
