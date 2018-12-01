@@ -13,27 +13,71 @@ def plot_scalar_field(data, title=""):
     """
     2D plot of a numpy array of scalars using imshow
     """
-    f, ax = plt.subplots(1, figsize=(10,10))
-    im = ax.imshow(data.T, origin='lower', cmap=plt.get_cmap('rainbow'), interpolation='hermite', extent=(x[0], x[-1], y[0], y[-1]))
-    cb = f.colorbar(im, ax=ax)
-    ax.set_title(title)
-    fname = "../images/vort{:04}.png".format(Nfig)
+    f, ax = plt.subplots(1, figsize=(10, 8))
+    im = ax.imshow(data.T, origin='lower', cmap=plt.get_cmap('rainbow'), interpolation='none', extent=(x[0], x[-1], y[0], y[-1]))#, vmin=-8, vmax=8)
+    cb = f.colorbar(im, ax=ax, fraction=0.0355, pad=0.02)
+
+    ax.set_title(title, size=20)
+    ax.set_xlabel("x", size = 18)
+    ax.set_ylabel("y", size = 18)
+    ax.xaxis.set_tick_params(labelsize=12)
+    ax.yaxis.set_tick_params(labelsize=12)
+    cb.ax.tick_params(labelsize=12)
+
+    plt.tight_layout()
+
+    fname = "../images/vort{:03}.png".format(Nfig)
     print("  {} saved.".format(fname))
-    plt.savefig(fname, dpi=120)
+    plt.savefig(fname, dpi=100)
+    plt.close()
+
+
+def plot_stream(data, title=""):
+    """
+    2D plot of stream function using contours
+    """
+    f, ax = plt.subplots(1, figsize=(10, 8))
+    nLevels = 25
+    levels = np.linspace(np.min(data), np.max(data), nLevels)
+    ax.contour(xx, yy, data.T, levels, origin='lower', colors='k')
+
+    ax.set_title(title, size=20)
+    ax.set_xlabel("x", size = 18)
+    ax.set_ylabel("y", size = 18)
+    ax.xaxis.set_tick_params(labelsize=12)
+    ax.yaxis.set_tick_params(labelsize=12)
+
+    plt.tight_layout()
+
+    fname = "../images/streamf{:03}.png".format(Nfig)
+    print("  {} saved.".format(fname))
+    plt.savefig(fname, dpi=100)
+    plt.close()
 
 
 def plot_vector_field(vel, title=""):
     """
     2D plot of two numpy arrays of vector components using quiver
     """
-    f, ax = plt.subplots(1, figsize=(10,10))
+    f, ax = plt.subplots(1, figsize=(10, 8))
     u = vel[0].T
     v = vel[1].T
-    skip = 4
-    Q = ax.quiver(xx[::skip, ::skip], yy[::skip, ::skip], u[::skip, ::skip], v[::skip, ::skip], pivot='mid', units='inches', scale=40, scale_units='width', headwidth=3, headlength=4, headaxislength=3.5)
-    qk = plt.quiverkey(Q, 0.5, 0.05, 1, '1', coordinates='figure')
-    ax.set_title(title)
-    plt.show()
+    skip = 8
+    Q = ax.quiver(xx[::skip, ::skip], yy[::skip, ::skip], u[::skip, ::skip], v[::skip, ::skip], pivot='middle', units='inches', scale=40, scale_units='width', headwidth=3, headlength=4, headaxislength=3.5)
+    qk = plt.quiverkey(Q, 0.95, 0.95, 1, '1', coordinates='figure')
+
+    ax.set_title(title, size=20)
+    ax.set_xlabel("x", size = 18)
+    ax.set_ylabel("y", size = 18)
+    ax.xaxis.set_tick_params(labelsize=12)
+    ax.yaxis.set_tick_params(labelsize=12)
+
+    plt.tight_layout()
+
+    fname = "../images/vel{:03}.png".format(Nfig)
+    print("  {} saved.".format(fname))
+    plt.savefig(fname, dpi=100)
+    plt.close()
 
 
 
@@ -169,7 +213,7 @@ LY = 6
 
 x = np.linspace(0, LX, NX)
 y = np.linspace(-LY//2, LY//2, NY)
-
+xx, yy = np.meshgrid(x, y)
 dx = x[1] - x[0]
 dy = y[1] - y[0]
 
@@ -186,7 +230,7 @@ h = np.min([dx, dy])
 u = deltaU / 2
 dtmax = np.min([h**2 / (4 * kin_visc), kin_visc / u])
 print("dtmax: {}\n".format(dtmax))
-dt = 0.95 * dtmax 
+dt = 0.5 * dtmax 
 
 # Begin stepping
 i = 0
@@ -200,7 +244,14 @@ while True:
     if i % Nprint == 0:
         print("Step: {} (t = {:2.4f})".format(i, dt * i))
     if i % Nplot == 0:
-        plot_scalar_field(vort, "Vorticity, t = {:2.2f}".format(dt * i))
+        plot_scalar_field(vort, "Vorticity, t = {:2.1f}".format(dt * i))
+
+        plot_stream(streamf, "Stream Function, t = {:2.1f}".format(dt * i ))
+
+        streamf_x, streamf_y = gradient_scalar(streamf)
+        vel = np.array([streamf_y, -streamf_x])
+        plot_vector_field(vel, "Velocity Vectors, t = {:2.1f}".format(dt * i ))
+
         Nfig += 1
 
     vort, streamf = take_step(vort, streamf)
