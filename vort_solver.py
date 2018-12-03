@@ -14,7 +14,7 @@ def plot_scalar_field(data, title=""):
     2D plot of a numpy array of scalars using imshow
     """
     f, ax = plt.subplots(1, figsize=(10, 8))
-    im = ax.imshow(data.T, origin='lower', cmap=plt.get_cmap('rainbow'), interpolation='none', extent=(x[0], x[-1], y[0], y[-1]))#, vmin=-8, vmax=8)
+    im = ax.imshow(data.T, origin='lower', cmap=plt.get_cmap('rainbow'), interpolation='none', extent=(x[0], x[-1], y[0], y[-1]), vmax=0)
     cb = f.colorbar(im, ax=ax, fraction=0.0355, pad=0.02)
 
     ax.set_title(title, size=20)
@@ -55,6 +55,36 @@ def plot_stream(data, title=""):
     plt.close()
 
 
+def plot_vort_stream(vort, streamf, title=""):
+    """
+    2D plot of a both vort and streamf
+    """
+    f, ax = plt.subplots(1, figsize=(10, 8))
+
+    im = ax.imshow(vort.T, origin='lower', cmap=plt.get_cmap('plasma_r'), interpolation='none', extent=(x[0], x[-1], y[0], y[-1]), vmax=0)
+    cb = f.colorbar(im, ax=ax, fraction=0.0355, pad=0.02)
+
+    nLevels = 15
+    data = -streamf
+    # levels = np.linspace(np.min(data), np.max(data), nLevels)
+    # ax.contour(xx, yy, data.T, levels, origin='lower', colors='k')
+    ax.contour(xx, yy, data.T, origin='lower', colors='k')
+
+    ax.set_title(title, size=20)
+    ax.set_xlabel("x", size = 18)
+    ax.set_ylabel("y", size = 18)
+    ax.xaxis.set_tick_params(labelsize=12)
+    ax.yaxis.set_tick_params(labelsize=12)
+    cb.ax.tick_params(labelsize=12)
+
+    plt.tight_layout()
+
+    fname = "../images/vort_streamf{:03}.png".format(Nfig)
+    print("  {} saved.".format(fname))
+    plt.savefig(fname, dpi=100)
+    plt.close()
+
+
 def plot_vector_field(vel, title=""):
     """
     2D plot of two numpy arrays of vector components using quiver
@@ -63,7 +93,7 @@ def plot_vector_field(vel, title=""):
     u = vel[0].T
     v = vel[1].T
     skip = 8
-    Q = ax.quiver(xx[::skip, ::skip], yy[::skip, ::skip], u[::skip, ::skip], v[::skip, ::skip], pivot='middle', units='inches', scale=40, scale_units='width', headwidth=3, headlength=4, headaxislength=3.5)
+    Q = ax.quiver(xx[::skip, ::skip], yy[::skip, ::skip], u[::skip, ::skip], v[::skip, ::skip], pivot='middle', units='inches', scale=30, scale_units='width', headwidth=3, headlength=4, headaxislength=3.5)
     qk = plt.quiverkey(Q, 0.95, 0.95, 1, '1', coordinates='figure')
 
     ax.set_title(title, size=20)
@@ -144,7 +174,6 @@ def solve_poisson(f):
 
         # Neumann BC for the periodic boundaries
         u_new[0, :] = u_new[1, :]
-        # u_new[-1, :] = u_new[-2, :]
         u_new[-1, :] = u_new[0, :]
 
         # Dirichlet BC for the stress free boundaries
@@ -158,8 +187,6 @@ def solve_poisson(f):
         # if error_mag != int(np.log10(error)):
         #     error_mag = int(np.log10(error))
         #     print("  err: {:1.8E}".format(error))
-    # plot_scalar_field(f, "f in Poisson")
-    # plot_scalar_field(u, "u in Poisson")
     return u
 
 
@@ -170,13 +197,9 @@ def take_step(vort, streamf):
     # update vorticity
     [vort_x, vort_y] = gradient_scalar(vort)
     [streamf_x, streamf_y] = gradient_scalar(streamf)
-    [vort_xx, vort_yx] = gradient_scalar(vort_x)
-    [vort_yx, vort_yy] = gradient_scalar(vort_y)
 
     vort += dt * (kin_visc * laplace_scalar(vort) - (vort_x * streamf_y) + (vort_y * streamf_x))
-    # vort += dt * (kin_visc * (vort_xx + vort_yy) - (vort_x * streamf_y) + (vort_y * streamf_x))
 
-    # vort[-1, :] = vort[0, :]
     vort[:, 0] = 0
     vort[:, -1] = 0
 
@@ -206,7 +229,7 @@ print("\nVorticity Equation Solver For 2D Incompressible Flow\n")
 random.seed(12345678987654321)
 
 # NX by NY grid, dimensions LX by LY
-NX = 128
+NX = 2 * 128
 NY = 2 * 128
 LX = 8
 LY = 6
@@ -224,37 +247,58 @@ kick = 0.03; deltaU = 2; delta = 0.2
 vort = init_cond(kick, deltaU, delta)
 
 # streamf = np.zeros( (NX, NY) )
-streamf = np.load("initial_streamf.npz")["streamf"]
+# streamf = np.load("initial_streamf_128x256.npz")["streamf"]
+streamf = np.load("initial_streamf_256x256.npz")["streamf"]
 
 h = np.min([dx, dy])
-u = deltaU / 2
-dtmax = np.min([h**2 / (4 * kin_visc), kin_visc / u])
-print("dtmax: {}\n".format(dtmax))
-dt = 0.5 * dtmax 
+u_max = deltaU / 2 + 0.5 * kick
+v_max = 0
+dtmax = np.min([h**2 / (4 * kin_visc), 2 * kin_visc / (u_max + v_max)])
+dt_mult = 0.5
+dt = dt_mult * dtmax 
 
 # Begin stepping
 i = 0
+t = 0
 Tplot = 0.5
 Tprint = 0.25
-Nplot = int(Tplot / dt)
-Nprint = int(Tprint / dt)
 Nfig = 0
-poisson_tol = 1e-6
+poisson_tol = 1e-5
 while True:
-    if i % Nprint == 0:
-        print("Step: {} (t = {:2.4f})".format(i, dt * i))
-    if i % Nplot == 0:
-        plot_scalar_field(vort, "Vorticity, t = {:2.1f}".format(dt * i))
+    # Print Status
+    if t % Tprint < dt and i != 1:
+        print("Step: {} (t = {:2.4f}, dt = {:1.2E})".format(i, t, dt))
 
-        plot_stream(streamf, "Stream Function, t = {:2.1f}".format(dt * i ))
+    # Plot Status
+    if t % Tplot < dt and i != 1:
+        plot_scalar_field(vort, "Vorticity, t = {:2.1f}".format(t))
+
+        plot_stream(streamf, "Stream Function, t = {:2.1f}".format(t))
+
+        plot_vort_stream(vort, streamf, "Vorticity and Stream Function, t = {:2.1f}".format(t))
 
         streamf_x, streamf_y = gradient_scalar(streamf)
         vel = np.array([streamf_y, -streamf_x])
-        plot_vector_field(vel, "Velocity Vectors, t = {:2.1f}".format(dt * i ))
+        plot_vector_field(vel, "Velocity Vectors, t = {:2.1f}".format(t))
+
+        # fname = "../data/step{:03}.npz".format(Nfig)
+        # np.savez(fname, vort=vort, streamf=streamf, vel=vel)
+        # print("{} saved.".format(fname))
 
         Nfig += 1
 
+    # Step forward in time
     vort, streamf = take_step(vort, streamf)
+    t += dt
+    
+    # Recalculate dtmax
+    streamf_x, streamf_y = gradient_scalar(streamf)
+    u_max = np.max(np.abs(streamf_x))
+    v_max = np.max(np.abs(streamf_y))
+    dtmax = np.min([h**2 / (4 * kin_visc), 2 * kin_visc / (u_max + v_max)])
+    dt = dt_mult * dtmax
+
     # if i == 0:
-    #     np.savez("initial_streamf.npz", streamf=streamf)
+    #     np.savez("initial_streamf_256x256.npz", streamf=streamf)
+
     i += 1
